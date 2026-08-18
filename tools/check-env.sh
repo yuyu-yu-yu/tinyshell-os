@@ -34,8 +34,26 @@ if ! printf 'int main(void) { return 0; }\n' \
 fi
 rm -f /tmp/tinyos-env-check.o
 
-printf 'TinyShell OS toolchain: OK\n'
-printf '  gcc:  %s\n' "$(gcc -dumpfullversion)"
-printf '  qemu: %s\n' "$(qemu-system-i386 --version | head -n 1)"
-printf '  grub: %s\n' "$(grub-mkrescue --version | head -n 1)"
+gcc_version="$(gcc -dumpfullversion)"
+qemu_version="$(qemu-system-i386 --version | head -n 1)"
+grub_version="$(grub-mkrescue --version | head -n 1)"
 
+if [[ "${gcc_version}" != 13.* ]]; then
+    printf 'ERROR: expected GCC 13.x, found %s\n' "${gcc_version}" >&2
+    exit 1
+fi
+
+if [[ "${qemu_version}" != *"version 8."* ]]; then
+    printf 'ERROR: expected QEMU 8.x, found %s\n' "${qemu_version}" >&2
+    exit 1
+fi
+
+if [[ "${grub_version}" != *" 2.12"* ]]; then
+    printf 'ERROR: expected GRUB 2.12, found %s\n' "${grub_version}" >&2
+    exit 1
+fi
+
+printf 'TinyShell OS toolchain: OK\n'
+printf '  gcc:  %s\n' "${gcc_version}"
+printf '  qemu: %s\n' "${qemu_version}"
+printf '  grub: %s\n' "${grub_version}"

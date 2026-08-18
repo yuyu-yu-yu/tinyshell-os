@@ -28,6 +28,12 @@ TinyShell OS 是一个 i386 教学型微内核课程项目。仓库当前已经�
 
 当前尚未实现 GDT、IDT、分页、调度、用户态、IPC、文件系统或 Shell。Agent 不得把计划功能描述成已完成功能。
 
+## Docker 是强制验收环境
+
+所有成员和 Agent 必须使用仓库根目录的 `Dockerfile`。宿主机可以使用任何编辑器，也可以运行本地编译器做快速检查，但每次提交和 PR 前必须通过 Docker 测试。
+
+禁止为了通过构建而在宿主机或容器中临时安装未写入 `Dockerfile` 的包。若确实缺少依赖，应在 PR 中说明，由成员 A 统一修改 Dockerfile。
+
 ## 所有 Agent 的执行顺序
 
 ### 1. 获取并检查仓库
@@ -46,22 +52,32 @@ git switch main
 git pull --ff-only
 ```
 
-检查基线：
+确认 Docker Desktop 或 Docker Engine 已启动：
 
 ```bash
 git status --short --branch
-bash tools/check-env.sh
-make clean
-make test
+docker info
 ```
 
-开始修改前，`git status` 必须干净，测试必须显示：
+Windows PowerShell 运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/docker-test.ps1
+```
+
+Linux、macOS 或 WSL 运行：
+
+```bash
+bash tools/docker-test.sh
+```
+
+第一次运行需要构建镜像，耗时可能较长。开始修改前，`git status` 必须干净，Docker 测试必须显示：
 
 ```text
 QEMU boot test: PASS
 ```
 
-如果环境缺少依赖，先按 `README.md` 配置 WSL2 Ubuntu 24.04。不要改用 Windows TDM-GCC 构建内核。
+如果测试失败，先保存完整日志并判断是 Docker 启动问题、镜像构建问题还是项目测试问题。不得绕过 Docker 后声称环境验证通过。
 
 ### 2. 阅读项目约定
 
@@ -102,16 +118,14 @@ git switch -c feature/cycle-01-x-name
 
 每个 Agent 只能修改自己任务中列出的文件。若发现必须修改公共文件，先在 PR 说明中提出，由成员 A 在第二天集成。
 
-完成后运行：
+完成后再次运行与宿主机对应的 Docker 脚本：
 
-```bash
-make clean
-make test
-git diff --check
-git status --short
+```text
+Windows: tools/docker-test.ps1
+Linux/macOS/WSL: tools/docker-test.sh
 ```
 
-然后只暂存本角色文件，提交并推送角色分支。禁止提交 `build/`、ISO、日志、编辑器配置、凭据或环境文件。
+随后运行 `git diff --check` 和 `git status --short`，然后只暂存本角色文件，提交并推送角色分支。禁止提交 `build/`、ISO、日志、编辑器配置、凭据或环境文件。
 
 推荐提交信息：
 
@@ -127,6 +141,7 @@ D: console: add shared VGA and serial output
 ## 公共技术约束
 
 - 使用 i386、freestanding C11 和少量 GNU 汇编。
+- Dockerfile 是工具链的唯一来源；不得在个人分支改用另一套基础镜像或编译器。
 - 使用 `stdint.h`、`stddef.h` 等 freestanding 头文件；不得依赖宿主机 libc。
 - 不使用 C++、动态分配、线程库、异常或标准输入输出库。
 - C 代码必须通过现有 `-Wall -Wextra -Werror`。
@@ -249,11 +264,7 @@ B 不得调用控制台接口，也不得修改 `kernel_main`。成员 A 在第�
 
 ### 验收
 
-```bash
-make clean
-make test
-git diff --check
-```
+按“实现、测试和提交”一节运行与宿主机对应的 Docker 脚本，然后运行 `git diff --check`。
 
 B 必须能解释：
 
@@ -299,7 +310,7 @@ void interrupt_dispatch(struct interrupt_frame *frame);
 
 ### 验收
 
-第一天必须保证新增汇编和 C 文件可以通过完整链接。第二天由 A 在 GDT 初始化后调用 `idt_init()` 和 `int3`，目标日志为：
+第一天必须保证新增汇编和 C 文件可以在 Docker 中通过完整链接。第二天由 A 在 GDT 初始化后调用 `idt_init()` 和 `int3`，目标日志为：
 
 ```text
 IDT_OK
@@ -405,15 +416,14 @@ INT3_TEST_OK
 BOOT_OK
 ```
 
-集成完成后运行：
+集成完成后必须运行 Docker 测试：
 
-```bash
-make clean
-make test
-git diff --check
+```text
+Windows: tools/docker-test.ps1
+Linux/macOS/WSL: tools/docker-test.sh
 ```
 
-`make test` 也应扩展为检查本轮新增标记。只有成员 A 修改该测试。
+随后运行 `git diff --check`。容器内的 `make test` 也应扩展为检查本轮新增标记，只有成员 A 修改该测试。
 
 ## Agent 完成后必须返回的报告
 
@@ -426,10 +436,11 @@ git diff --check
 修改文件：
 实现内容：
 测试命令与结果：
+Docker 镜像 ID：
+GitHub Actions 状态：
 已知限制：
 AI 使用说明：
 需要 A 在第二天处理的集成事项：
 ```
 
 Agent 还要列出五个本成员必须能回答的答辩问题及简短答案。若测试失败，Agent 必须保留真实失败信息，不得把失败描述为完成。
-

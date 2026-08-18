@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+.vscode
+build
+release
+tmp
+*.core
+*.iso
+*.log
+*.o

@@ -44,13 +44,13 @@ $(ISO): $(KERNEL) config/grub.cfg
 	cp config/grub.cfg $(ISO_ROOT)/boot/grub/grub.cfg
 	grub-mkrescue -o $@ $(ISO_ROOT) >/dev/null 2>&1
 
-run: $(ISO)
+run: check $(ISO)
 	$(QEMU) -cdrom $(ISO) -m 64M -display none -serial mon:stdio -no-reboot
 
-debug: $(ISO)
+debug: check $(ISO)
 	$(QEMU) -cdrom $(ISO) -m 64M -display none -serial mon:stdio -no-reboot -S -s
 
-test: $(ISO)
+test: check $(ISO)
 	@rm -f $(QEMU_LOG)
 	@timeout 5s $(QEMU) -cdrom $(ISO) -m 64M -display none \
 		-serial file:$(QEMU_LOG) -monitor none -no-reboot -no-shutdown \

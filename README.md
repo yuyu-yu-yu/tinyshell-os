@@ -4,49 +4,45 @@
 
 当前里程碑是可重复的最小启动基线：GRUB Multiboot 加载 32 位内核，内核初始化串口和 VGA 文本输出，并在 QEMU 中打印启动信息。
 
-## 开发环境
+## 统一开发环境
 
-- Windows + WSL2 Ubuntu 24.04
-- GCC 13（`-m32 -ffreestanding`）
-- GNU binutils / GRUB 2
-- QEMU 8
-- GNU Make / GDB / NASM / xorriso
+Docker 是本项目的标准构建和验收环境。仓库中的 `Dockerfile` 固定 Ubuntu 24.04 基础镜像，并安装 GCC 13、32 位编译支持、GRUB 2、QEMU 8、binutils、GDB、NASM 和 xorriso。
 
-本机已经创建 WSL 用户 `tinyos` 并安装上述依赖。Windows 项目目录在：
-
-```text
-C:\Users\11719\Desktop\简历\OS课程项目
-```
-
-对应的 WSL 路径是：
-
-```text
-/mnt/c/Users/11719/Desktop/简历/OS课程项目
-```
+组员的宿主机可以是 Windows、macOS 或 Linux，但提交前必须通过 Docker 测试。宿主机直接执行 `make test` 只用于快速开发，不能代替容器验收。
 
 ## 快速开始
 
-打开 PowerShell：
+Windows PowerShell：
 
 ```powershell
-wsl -d Ubuntu-24.04
-cd '/mnt/c/Users/11719/Desktop/简历/OS课程项目'
-bash tools/check-env.sh
-make
-make test
+powershell -ExecutionPolicy Bypass -File tools/docker-test.ps1
 ```
+
+Linux、macOS 或 WSL：
+
+```bash
+bash tools/docker-test.sh
+```
+
+脚本会构建 `tinyshell-os-dev:toolchain-v1` 镜像，在容器内编译内核、生成 ISO，并用无图形 QEMU 完成启动测试。
+
+VS Code 用户可以安装 Dev Containers 扩展，然后选择 **Dev Containers: Reopen in Container**。容器创建后会自动检查工具链并运行测试。
 
 启动交互式 QEMU：
 
 ```bash
-make run
+docker build --tag tinyshell-os-dev:toolchain-v1 .
+docker run --rm -it \
+  --volume "$PWD:/workspace" \
+  --workdir /workspace \
+  tinyshell-os-dev:toolchain-v1 make run
 ```
 
 在 `-nographic` 模式下，按 `Ctrl+A`，再按 `X` 退出 QEMU。
 
 ## 当前验收标准
 
-`make test` 应检查：
+Docker 测试应检查：
 
 1. 内核是有效的 x86 Multiboot 镜像。
 2. 能生成 `build/tinyshell.iso`。
@@ -61,6 +57,8 @@ docs/       架构与开发约定
 include/    内核公共头文件
 kernel/     内核 C 代码
 tools/      环境检查和辅助脚本
+.devcontainer/  VS Code 容器配置
+.github/    云端 Docker 构建与测试
 build/      生成物，不提交 Git
 ```
 
