@@ -13,10 +13,11 @@ CFLAGS := -m32 -std=c11 -ffreestanding -fno-pie -fno-stack-protector \
 ASFLAGS := -m32 -ffreestanding -fno-pie -c
 LDFLAGS := -m elf_i386 -T linker.ld -nostdlib
 
+C_SOURCES := $(shell find kernel -type f -name '*.c' | sort)
+ASM_SOURCES := $(shell find boot -type f -name '*.S' | sort)
 OBJECTS := \
-	$(BUILD_DIR)/boot/multiboot.o \
-	$(BUILD_DIR)/kernel/kernel.o \
-	$(BUILD_DIR)/kernel/serial.o
+	$(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SOURCES)) \
+	$(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SOURCES))
 
 .PHONY: all check clean run debug test
 
@@ -25,11 +26,11 @@ all: check $(ISO)
 check:
 	@bash tools/check-env.sh
 
-$(BUILD_DIR)/boot/multiboot.o: boot/multiboot.S
+$(BUILD_DIR)/%.o: %.S
 	@mkdir -p $(@D)
 	$(CC) $(ASFLAGS) $< -o $@
 
-$(BUILD_DIR)/kernel/%.o: kernel/%.c
+$(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -60,4 +61,3 @@ test: $(ISO)
 
 clean:
 	rm -rf $(BUILD_DIR)
-

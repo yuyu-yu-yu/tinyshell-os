@@ -66,3 +66,8 @@ build/      生成物，不提交 Git
 
 后续模块按 `docs/architecture.md` 中的边界逐步加入。
 
+## 小组并行开发
+
+第一轮给 A、B、C、D 四名成员及其 AI Agent 的完整任务书见：
+
+- [`docs/agent-brief-cycle-01.md`](docs/agent-brief-cycle-01.md)
