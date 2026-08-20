@@ -1,3 +1,4 @@
+#include "boot/multiboot.h"
 #include "serial.h"
 
 #include <stddef.h>
@@ -7,7 +8,6 @@ enum {
     VGA_WIDTH = 80,
     VGA_HEIGHT = 25,
     VGA_COLOR_LIGHT_GREY_ON_BLACK = 0x07,
-    MULTIBOOT_BOOTLOADER_MAGIC = 0x2BADB002,
 };
 
 static volatile uint16_t *const vga_buffer = (uint16_t *)0xB8000;
@@ -55,23 +55,28 @@ static void vga_write(const char *text)
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_address)
 {
-    (void)multiboot_info_address;
-
     serial_init();
     vga_clear();
 
-    if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-        serial_write("TinyShell OS: invalid Multiboot magic\n");
-        vga_write("TinyShell OS: invalid Multiboot magic\n");
+    struct boot_memory_summary memory_summary;
+    if (!multiboot_parse(
+            multiboot_magic,
+            multiboot_info_address,
+            &memory_summary)) {
+        serial_write("TinyShell OS: invalid Multiboot information\n");
+        vga_write("TinyShell OS: invalid Multiboot information\n");
         return;
     }
 
     serial_write("TinyShell OS booting...\n");
     serial_write("Architecture: i386\n");
+    serial_write("MULTIBOOT_OK\n");
+    serial_write("MEMORY_MAP_OK\n");
     serial_write("BOOT_OK\n");
 
     vga_write("TinyShell OS booting...\n");
     vga_write("Architecture: i386\n");
+    vga_write("MULTIBOOT_OK\n");
+    vga_write("MEMORY_MAP_OK\n");
     vga_write("BOOT_OK\n");
 }
-
