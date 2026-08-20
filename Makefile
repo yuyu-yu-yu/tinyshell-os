@@ -56,6 +56,8 @@ test: check $(ISO)
 		-serial file:$(QEMU_LOG) -monitor none -no-reboot -no-shutdown \
 		>/dev/null 2>&1 || test $$? -eq 124
 	@grep -q "TinyShell OS booting" $(QEMU_LOG)
+	@grep -q "MULTIBOOT_OK" $(QEMU_LOG)
+	@grep -q "MEMORY_MAP_OK" $(QEMU_LOG)
 	@grep -q "BOOT_OK" $(QEMU_LOG)
 	@echo "QEMU boot test: PASS"
 
