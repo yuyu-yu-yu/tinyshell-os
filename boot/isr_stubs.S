@@ -59,11 +59,16 @@ ISR_NO_ERROR 31
 .type interrupt_common_entry, @function
 
 interrupt_common_entry:
+    cld
     pushal
-    movl %esp, %eax
-    pushl %eax
+
+    movl %esp, %ebx
+    andl $-16, %esp
+    subl $12, %esp
+    pushl %ebx
     call interrupt_dispatch
-    addl $4, %esp
+
+    movl %ebx, %esp
     popal
     addl $8, %esp
     iret
