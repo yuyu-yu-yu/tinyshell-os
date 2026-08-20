@@ -24,10 +24,13 @@ stack_top:
 _start:
     mov $stack_top, %esp
     xor %ebp, %ebp
+    cld
 
+    sub $8, %esp
     push %ebx
     push %eax
     call kernel_main
+    add $16, %esp
 
 1:
     cli

@@ -2,7 +2,7 @@
 
 基于 x86（i386）的教学型微内核操作系统课程设计。
 
-当前里程碑是可重复的最小启动基线：GRUB Multiboot 加载 32 位内核，内核初始化串口和 VGA 文本输出，并在 QEMU 中打印启动信息。
+当前里程碑是可重复的第一轮内核基线：GRUB Multiboot 加载 32 位内核，内核初始化统一 Console、GDT 和 IDT，解析 BIOS memory map，并用真实 `int3` 验证异常入口能够返回。
 
 ## 统一开发环境
 
@@ -46,7 +46,7 @@ Docker 测试应检查：
 
 1. 内核是有效的 x86 Multiboot 镜像。
 2. 能生成 `build/tinyshell.iso`。
-3. QEMU 串口日志包含 `TinyShell OS booting` 和 `BOOT_OK`。
+3. QEMU 串口日志包含 Console、GDT、IDT、Multiboot memory map、`int3` 与 `BOOT_OK` 的成功标记。
 
 ## 目录结构
 
@@ -66,6 +66,7 @@ build/      生成物，不提交 Git
 
 ## 小组并行开发
 
-第一轮给 A、B、C、D 四名成员及其 AI Agent 的完整任务书见：
+给 A、B、C、D 四名成员及其 AI Agent 的完整任务书见：
 
 - [`docs/agent-brief-cycle-01.md`](docs/agent-brief-cycle-01.md)
+- [`docs/agent-brief-cycle-02.md`](docs/agent-brief-cycle-02.md)：2026-08-21 至 2026-08-22 加速轮次
