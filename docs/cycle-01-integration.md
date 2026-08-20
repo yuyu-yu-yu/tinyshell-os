@@ -62,3 +62,24 @@ BOOT_OK
 ```
 
 提交前运行对应宿主机的 Docker 脚本，并确认 GitHub Actions 的 Docker CI 通过。
+
+## 实际集成结果
+
+第一轮按 D → B → C → A 的顺序完成集成。C 的公共中断入口在合并时补充了 `cld` 和 i386 SysV 16 字节 call-site 栈对齐，随后才接入真实 `int3` 测试；A 的启动入口也保持相同 ABI 约束。D 的正确分支只包含 Console 头文件与实现，未带入旧远端分支中的异常临时文件。
+
+Docker 构建、GRUB 校验和无图形 QEMU 测试通过，实际串口日志为：
+
+```text
+TinyShell OS booting...
+Architecture: i386
+CONSOLE_OK
+GDT_OK
+IDT_OK
+MULTIBOOT_OK
+MEMORY_MAP_OK
+EXCEPTION vector=3
+INT3_TEST_OK
+BOOT_OK
+```
+
+这证明第一轮模块不是只通过静态编译：新 GDT 和 IDT 已在同一启动路径中加载，异常确实进入 C dispatcher，并通过 `iret` 返回到内核继续输出 `BOOT_OK`。
