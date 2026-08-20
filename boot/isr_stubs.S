@@ -59,8 +59,8 @@ ISR_NO_ERROR 31
 .type interrupt_common_entry, @function
 
 interrupt_common_entry:
-    cld
     pushal
+    cld
 
     movl %esp, %ebx
     andl $-16, %esp

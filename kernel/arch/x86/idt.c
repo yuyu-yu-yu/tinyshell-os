@@ -1,3 +1,4 @@
+#include "arch/x86/gdt.h"
 #include "arch/x86/idt.h"
 
 #include <stddef.h>
@@ -6,7 +7,6 @@
 enum {
     IDT_ENTRY_COUNT = 256,
     CPU_EXCEPTION_COUNT = 32,
-    KERNEL_CODE_SELECTOR = 0x08,
     INTERRUPT_GATE = 0x8E,
 };
 
@@ -15,6 +15,12 @@ static struct idtr_descriptor idtr;
 
 extern uint32_t isr_stub_table[CPU_EXCEPTION_COUNT];
 extern void idt_load(const struct idtr_descriptor *descriptor);
+
+_Static_assert(sizeof(struct idt_entry) == 8U, "IDT entries must be 8 bytes");
+_Static_assert(
+    sizeof(struct idtr_descriptor) == 6U,
+    "IDTR descriptor must be 6 bytes"
+);
 
 void idt_set_gate(
     uint8_t vector,
@@ -42,7 +48,7 @@ void idt_init(void)
         idt_set_gate(
             (uint8_t)vector,
             isr_stub_table[vector],
-            KERNEL_CODE_SELECTOR,
+            GDT_KERNEL_CODE_SELECTOR,
             INTERRUPT_GATE
         );
     }
