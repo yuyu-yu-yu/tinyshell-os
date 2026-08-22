@@ -38,21 +38,55 @@ _Static_assert(
     "unexpected Multiboot memory-map type offset"
 );
 
-static bool count_memory_map_entries(
-    uint32_t mmap_address,
-    uint32_t mmap_length,
+struct multiboot_view {
+    const struct multiboot_info *info;
+};
+
+static bool validate_multiboot_info(
+    uint32_t magic,
+    uint32_t info_address,
+    struct multiboot_view *view
+)
+{
+    if (magic != MULTIBOOT_BOOTLOADER_MAGIC
+        || info_address == 0U
+        || info_address > UINT32_MAX - sizeof(struct multiboot_info)
+        || view == NULL) {
+        return false;
+    }
+
+    const struct multiboot_info *const info =
+        (const struct multiboot_info *)(uintptr_t)info_address;
+    const uint32_t required_flags =
+        MULTIBOOT_INFO_MEMORY | MULTIBOOT_INFO_MEMORY_MAP;
+
+    if ((info->flags & required_flags) != required_flags
+        || info->mmap_addr == 0U
+        || info->mmap_length == 0U
+        || info->mmap_addr > UINT32_MAX - info->mmap_length) {
+        return false;
+    }
+
+    const struct multiboot_view validated = {
+        .info = info,
+    };
+    *view = validated;
+    return true;
+}
+
+static bool walk_memory_map(
+    const struct multiboot_view *view,
+    boot_memory_region_visitor visitor,
+    void *context,
     uint32_t *entry_count
 )
 {
-    if (mmap_address == 0U || mmap_length == 0U || entry_count == NULL) {
+    if (view == NULL || view->info == NULL) {
         return false;
     }
 
-    if (mmap_address > UINT32_MAX - mmap_length) {
-        return false;
-    }
-
-    const uint32_t mmap_end = mmap_address + mmap_length;
+    const uint32_t mmap_address = view->info->mmap_addr;
+    const uint32_t mmap_end = mmap_address + view->info->mmap_length;
     uint32_t cursor = mmap_address;
     uint32_t count = 0U;
 
@@ -81,7 +115,18 @@ static bool count_memory_map_entries(
             return false;
         }
 
+        const struct boot_memory_region region = {
+            .base = entry->base_addr,
+            .length = entry->length,
+            .type = entry->type,
+        };
+
         ++count;
+
+        if (visitor != NULL && !visitor(&region, context)) {
+            return false;
+        }
+
         cursor += record_size;
     }
 
@@ -89,7 +134,9 @@ static bool count_memory_map_entries(
         return false;
     }
 
-    *entry_count = count;
+    if (entry_count != NULL) {
+        *entry_count = count;
+    }
     return true;
 }
 
@@ -99,35 +146,75 @@ bool multiboot_parse(
     struct boot_memory_summary *summary
 )
 {
-    if (magic != MULTIBOOT_BOOTLOADER_MAGIC
-        || info_address == 0U
-        || info_address > UINT32_MAX - sizeof(struct multiboot_info)
-        || summary == NULL) {
+    if (summary == NULL) {
         return false;
     }
 
-    const struct multiboot_info *const info =
-        (const struct multiboot_info *)(uintptr_t)info_address;
-    const uint32_t required_flags =
-        MULTIBOOT_INFO_MEMORY | MULTIBOOT_INFO_MEMORY_MAP;
-
-    if ((info->flags & required_flags) != required_flags) {
+    struct multiboot_view view;
+    if (!validate_multiboot_info(magic, info_address, &view)) {
         return false;
     }
 
     struct boot_memory_summary parsed = {
-        .lower_kib = info->mem_lower,
-        .upper_kib = info->mem_upper,
+        .lower_kib = view.info->mem_lower,
+        .upper_kib = view.info->mem_upper,
         .mmap_entry_count = 0U,
     };
 
-    if (!count_memory_map_entries(
-            info->mmap_addr,
-            info->mmap_length,
-            &parsed.mmap_entry_count)) {
+    if (!walk_memory_map(&view, NULL, NULL, &parsed.mmap_entry_count)) {
         return false;
     }
 
     *summary = parsed;
+    return true;
+}
+
+bool multiboot_for_each_memory_region(
+    uint32_t magic,
+    uint32_t info_address,
+    boot_memory_region_visitor visitor,
+    void *context
+)
+{
+    if (visitor == NULL) {
+        return false;
+    }
+
+    struct multiboot_view view;
+    if (!validate_multiboot_info(magic, info_address, &view)) {
+        return false;
+    }
+
+    /* Validate the complete buffer before allowing visitor side effects. */
+    if (!walk_memory_map(&view, NULL, NULL, NULL)) {
+        return false;
+    }
+
+    return walk_memory_map(&view, visitor, context, NULL);
+}
+
+bool multiboot_get_owned_ranges(
+    uint32_t magic,
+    uint32_t info_address,
+    struct boot_owned_ranges *ranges
+)
+{
+    if (ranges == NULL) {
+        return false;
+    }
+
+    struct multiboot_view view;
+    if (!validate_multiboot_info(magic, info_address, &view)
+        || !walk_memory_map(&view, NULL, NULL, NULL)) {
+        return false;
+    }
+
+    const struct boot_owned_ranges owned = {
+        .info_address = info_address,
+        .info_length = (uint32_t)sizeof(struct multiboot_info),
+        .mmap_address = view.info->mmap_addr,
+        .mmap_length = view.info->mmap_length,
+    };
+    *ranges = owned;
     return true;
 }

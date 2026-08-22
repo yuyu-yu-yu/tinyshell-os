@@ -34,10 +34,43 @@ struct boot_memory_summary {
     uint32_t mmap_entry_count;
 };
 
+struct boot_memory_region {
+    uint64_t base;
+    uint64_t length;
+    uint32_t type;
+};
+
+/* The region pointer is valid only for the duration of the callback. */
+typedef bool (*boot_memory_region_visitor)(
+    const struct boot_memory_region *region,
+    void *context
+);
+
+struct boot_owned_ranges {
+    uint32_t info_address;
+    /* Bytes in the Multiboot information prefix consumed by TinyShell. */
+    uint32_t info_length;
+    uint32_t mmap_address;
+    uint32_t mmap_length;
+};
+
 bool multiboot_parse(
     uint32_t magic,
     uint32_t info_address,
     struct boot_memory_summary *summary
+);
+
+bool multiboot_for_each_memory_region(
+    uint32_t magic,
+    uint32_t info_address,
+    boot_memory_region_visitor visitor,
+    void *context
+);
+
+bool multiboot_get_owned_ranges(
+    uint32_t magic,
+    uint32_t info_address,
+    struct boot_owned_ranges *ranges
 );
 
 #endif

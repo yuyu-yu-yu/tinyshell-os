@@ -3,6 +3,7 @@ ENTRY(_start)
 SECTIONS
 {
     . = 1M;
+    __kernel_start = .;
 
     .text BLOCK(4K) : ALIGN(4K)
     {
@@ -25,5 +26,7 @@ SECTIONS
         *(COMMON)
         *(.bss*)
     }
-}
 
+    __kernel_end = .;
+    ASSERT(__kernel_end > __kernel_start, "kernel image range is empty")
+}
