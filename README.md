@@ -2,7 +2,7 @@
 
 基于 x86（i386）的教学型微内核操作系统课程设计。
 
-当前基线已完成前两轮：GRUB Multiboot 加载 32 位内核，内核初始化 Console、GDT 和 IDT，解析 BIOS memory map，管理物理页，并驱动 PIC、PIT 和 PS/2 键盘。启动自检使用真实 `int3` 和 IRQ0，启动后通过 IRQ1 回显键盘输入。
+当前基线已完成三轮：GRUB Multiboot 加载 32 位内核，内核初始化 Console、GDT 和 IDT，解析 BIOS memory map，管理物理页，并驱动 PIC、PIT 和 PS/2 键盘。在此基础上，内核已启用 i386 分页和 256 KiB 启动堆，可运行协作式内核任务，并通过静态 FIFO endpoint 传递拷贝式 IPC 消息。
 
 ## 统一开发环境
 
@@ -46,7 +46,7 @@ Docker 测试应检查：
 
 1. 内核是有效的 x86 Multiboot 镜像。
 2. 能生成 `build/tinyshell.iso`。
-3. QEMU 分别以 16、64、128 MiB 启动，串口日志包含 Multiboot、PMM、PIC/IRQ、PIT、键盘与 `BOOT_OK` 标记。
+3. QEMU 分别以 16、64、128 MiB 启动，串口日志包含 Multiboot、PMM、PIC/IRQ、PIT、键盘、分页、堆、任务和 IPC 标记，最后才输出 `BOOT_OK`。
 4. 三档 `PMM_FREE_PAGES` 严格递增，证明 PMM 使用了 GRUB 提供的真实内存图。
 
 ## 目录结构
@@ -72,3 +72,4 @@ build/      生成物，不提交 Git
 - [`docs/agent-brief-cycle-01.md`](docs/agent-brief-cycle-01.md)
 - [`docs/agent-brief-cycle-02.md`](docs/agent-brief-cycle-02.md)：2026-08-21 至 2026-08-22 加速轮次
 - [`docs/agent-brief-cycle-03.md`](docs/agent-brief-cycle-03.md)：2026-08-25 至 2026-08-26 分页、启动堆、协作任务与 IPC
+- [`docs/cycle-03-integration.md`](docs/cycle-03-integration.md)：第三轮实际合并、启动路径与测试证据
