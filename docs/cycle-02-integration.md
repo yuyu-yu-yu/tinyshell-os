@@ -63,7 +63,7 @@ pmm_reset
 执行一次单页 alloc/free 自检
 ```
 
-visitor 对非 `type == 1` 项直接返回 `true`；对可用项返回 `pmm_add_usable_region()` 的结果。任何解析或 PMM 加入失败都停止启动，不进入后续分配。可用区域保持原始 64 位范围，4 GiB 限制和页对齐由 PMM 统一处理。保留范围允许重叠，PMM 必须幂等地保持这些页不可分配。
+visitor 把 `type == 1` 项交给 `pmm_add_usable_region()`，把其他所有类型交给 `pmm_reserve_region()`。B 的 reserved-wins 状态使可用与保留描述即使重叠，最终也不会把固件保留页加入分配器。任何解析或 PMM 操作失败都停止启动。区域保持原始 64 位范围，4 GiB 限制和页对齐由 PMM 统一处理。
 
 ## IRQ、PIT 和键盘接线
 
@@ -89,3 +89,21 @@ synthetic decode 必须在 IRQ1 解屏蔽和 `sti` 之前完成，避免测试�
 第一步合入 A 后，原第一轮日志必须完整保留。最终集成还要检查 PMM、PIC、IRQ、PIT、真实 timer IRQ、synthetic keyboard 和 `BOOT_OK` 标记。Docker/QEMU 分别以 16、64、128 MiB 运行；三种配置都必须完成 Multiboot 解析、PMM alloc/free 和真实 PIT tick。
 
 提交前运行 `git diff --check`、staged 安全扫描和 Docker 测试。`build/`、kernel map、ISO、QEMU 日志与临时 synthetic harness 都是本地产物，不得进入提交。
+
+## 实际合并与验收记录
+
+`integration/cycle-02` 保留了四个成员的原提交，并按 A `1bf8431` → B `8691883` → C `ef5eda1` → D `625e618` 合并。每个合并后都在标准 Docker 镜像中重新编译 ISO 并启动 QEMU。
+
+最终启动路径保持 IF=0，完成 Multiboot、PMM、PIC、PIT 和 synthetic keyboard 自检后，只解屏 IRQ0/1，再执行 `sti`。`TIMER_IRQ_OK` 同时要求 PIT tick 和 IRQ0 dispatcher count 前进三次，因此不能通过直接调用 handler 伪造。启动成功后，主循环使用 `hlt` 等待中断并回显键盘队列。
+
+2026-08-25 本地 Docker/QEMU 矩阵结果：
+
+| QEMU 内存 | `PMM_FREE_PAGES` | 结果 |
+|---:|---:|---|
+| 16 MiB | 3735 | 通过 |
+| 64 MiB | 16023 | 通过 |
+| 128 MiB | 32407 | 通过 |
+
+三档数值严格递增，且每份日志只有一条 `PMM_FREE_PAGES`、不含 `BOOT_FAIL`。额外的 64 MiB 交互测试在 `KEYBOARD_READY` 之后通过 QEMU monitor 发送 `sendkey a`，串口日志末尾收到了单个 `a`，证明回显经过了真实 IRQ1。
+
+当前已知限制是 PIC 尚未处理 spurious IRQ7/15，也不会在解屏 slave IRQ 时自动解屏 cascade IRQ2；本轮只使用 master IRQ0/1，因此不影响当前验收。
