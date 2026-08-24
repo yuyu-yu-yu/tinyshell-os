@@ -2,7 +2,7 @@ CC := gcc
 LD := ld
 QEMU := qemu-system-i386
 QEMU_MEMORY ?= 64M
-QEMU_MEMORY_MATRIX ?= 16M 64M 128M
+QEMU_MEMORY_MATRIX := 16M 64M 128M
 
 BUILD_DIR := build
 ISO_ROOT := $(BUILD_DIR)/iso
@@ -61,7 +61,7 @@ test: check $(ISO)
 		timeout 5s $(QEMU) -cdrom $(ISO) -m "$$memory" -display none \
 			-serial "file:$$log" -monitor none -no-reboot -no-shutdown \
 			>/dev/null 2>&1 || status=$$?; \
-		test "$$status" -eq 0 -o "$$status" -eq 124; \
+		test "$$status" -eq 124; \
 		grep -q 'TinyShell OS booting' "$$log"; \
 		grep -q 'EXCEPTION vector=3' "$$log"; \
 		for marker in $$markers; do grep -q "$$marker" "$$log"; done; \
