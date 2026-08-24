@@ -5,6 +5,11 @@
 
 #include <stdint.h>
 
+enum {
+    CR0_WRITE_PROTECT = 1U << 16,
+    CR0_PAGING = 1U << 31,
+};
+
 void paging_load_directory(uintptr_t directory_address)
 {
     __asm__ volatile ("movl %0, %%cr3" : : "r"(directory_address) : "memory");
@@ -15,7 +20,7 @@ void paging_enable(void)
     uint32_t control;
 
     __asm__ volatile ("movl %%cr0, %0" : "=r"(control));
-    control |= 1U << 31;
+    control |= CR0_WRITE_PROTECT | CR0_PAGING;
     __asm__ volatile ("movl %0, %%cr0" : : "r"(control) : "memory");
 }
 
