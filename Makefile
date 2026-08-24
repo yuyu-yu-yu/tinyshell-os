@@ -53,20 +53,25 @@ debug: check $(ISO)
 
 test: check $(ISO)
 	@set -eu; \
-	markers='CONSOLE_OK GDT_OK IDT_OK MULTIBOOT_OK MEMORY_MAP_OK INT3_TEST_OK PMM_OK PMM_ALLOC_FREE_OK PIC_OK IRQ_OK PIT_OK TIMER_IRQ_OK KEYBOARD_DECODE_OK KEYBOARD_READY BOOT_OK'; \
+	markers='CONSOLE_OK GDT_OK IDT_OK MULTIBOOT_OK MEMORY_MAP_OK INT3_TEST_OK PMM_OK PMM_ALLOC_FREE_OK PIC_OK IRQ_OK PIT_OK TIMER_IRQ_OK KEYBOARD_DECODE_OK KEYBOARD_READY PAGING_OK VMM_MAP_OK HEAP_OK HEAP_COALESCE_OK TASK_OK SCHEDULER_OK IPC_OK IPC_TASK_FLOW_OK BOOT_OK'; \
 	for memory in $(QEMU_MEMORY_MATRIX); do \
 		log="$(BUILD_DIR)/qemu-$$memory.log"; \
+		clean_log="$$log.clean"; \
 		rm -f "$$log"; \
 		status=0; \
 		timeout 5s $(QEMU) -cdrom $(ISO) -m "$$memory" -display none \
 			-serial "file:$$log" -monitor none -no-reboot -no-shutdown \
 			>/dev/null 2>&1 || status=$$?; \
 		test "$$status" -eq 124; \
-		grep -q 'TinyShell OS booting' "$$log"; \
-		grep -q 'EXCEPTION vector=3' "$$log"; \
-		for marker in $$markers; do grep -q "$$marker" "$$log"; done; \
-		! grep -q 'BOOT_FAIL:' "$$log"; \
-		test "$$(grep -c '^PMM_FREE_PAGES=[0-9][0-9]*' "$$log")" -eq 1; \
+		tr -d '\r' < "$$log" > "$$clean_log"; \
+		test "$$(grep -Fxc 'TinyShell OS booting...' "$$clean_log")" -eq 1; \
+		test "$$(grep -Fxc 'EXCEPTION vector=3' "$$clean_log")" -eq 1; \
+		for marker in $$markers; do \
+			test "$$(grep -Fxc "$$marker" "$$clean_log")" -eq 1; \
+		done; \
+		! grep -q '^BOOT_FAIL:' "$$clean_log"; \
+		! grep -q '^PAGE_FAULT ' "$$clean_log"; \
+		test "$$(grep -c '^PMM_FREE_PAGES=[0-9][0-9]*$$' "$$clean_log")" -eq 1; \
 		echo "QEMU $$memory boot test: PASS"; \
 	done; \
 	p16=$$(awk -F= '/^PMM_FREE_PAGES=/{gsub(/\r/, "", $$2); print $$2}' $(BUILD_DIR)/qemu-16M.log); \
