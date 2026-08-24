@@ -1,12 +1,13 @@
 CC := gcc
 LD := ld
 QEMU := qemu-system-i386
+QEMU_MEMORY ?= 64M
+QEMU_MEMORY_MATRIX := 16M 64M 128M
 
 BUILD_DIR := build
 ISO_ROOT := $(BUILD_DIR)/iso
 KERNEL := $(BUILD_DIR)/kernel.elf
 ISO := $(BUILD_DIR)/tinyshell.iso
-QEMU_LOG := $(BUILD_DIR)/qemu.log
 
 CFLAGS := -m32 -std=c11 -ffreestanding -fno-pie -fno-stack-protector \
 	-fno-asynchronous-unwind-tables -Wall -Wextra -Werror -O2 -g -Iinclude
@@ -45,26 +46,36 @@ $(ISO): $(KERNEL) config/grub.cfg
 	grub-mkrescue -o $@ $(ISO_ROOT) >/dev/null 2>&1
 
 run: check $(ISO)
-	$(QEMU) -cdrom $(ISO) -m 64M -display none -serial mon:stdio -no-reboot
+	$(QEMU) -cdrom $(ISO) -m $(QEMU_MEMORY) -display none -serial mon:stdio -no-reboot
 
 debug: check $(ISO)
-	$(QEMU) -cdrom $(ISO) -m 64M -display none -serial mon:stdio -no-reboot -S -s
+	$(QEMU) -cdrom $(ISO) -m $(QEMU_MEMORY) -display none -serial mon:stdio -no-reboot -S -s
 
 test: check $(ISO)
-	@rm -f $(QEMU_LOG)
-	@timeout 5s $(QEMU) -cdrom $(ISO) -m 64M -display none \
-		-serial file:$(QEMU_LOG) -monitor none -no-reboot -no-shutdown \
-		>/dev/null 2>&1 || test $$? -eq 124
-	@grep -q "TinyShell OS booting" $(QEMU_LOG)
-	@grep -q "CONSOLE_OK" $(QEMU_LOG)
-	@grep -q "GDT_OK" $(QEMU_LOG)
-	@grep -q "IDT_OK" $(QEMU_LOG)
-	@grep -q "MULTIBOOT_OK" $(QEMU_LOG)
-	@grep -q "MEMORY_MAP_OK" $(QEMU_LOG)
-	@grep -q "EXCEPTION vector=3" $(QEMU_LOG)
-	@grep -q "INT3_TEST_OK" $(QEMU_LOG)
-	@grep -q "BOOT_OK" $(QEMU_LOG)
-	@echo "QEMU boot test: PASS"
+	@set -eu; \
+	markers='CONSOLE_OK GDT_OK IDT_OK MULTIBOOT_OK MEMORY_MAP_OK INT3_TEST_OK PMM_OK PMM_ALLOC_FREE_OK PIC_OK IRQ_OK PIT_OK TIMER_IRQ_OK KEYBOARD_DECODE_OK KEYBOARD_READY BOOT_OK'; \
+	for memory in $(QEMU_MEMORY_MATRIX); do \
+		log="$(BUILD_DIR)/qemu-$$memory.log"; \
+		rm -f "$$log"; \
+		status=0; \
+		timeout 5s $(QEMU) -cdrom $(ISO) -m "$$memory" -display none \
+			-serial "file:$$log" -monitor none -no-reboot -no-shutdown \
+			>/dev/null 2>&1 || status=$$?; \
+		test "$$status" -eq 124; \
+		grep -q 'TinyShell OS booting' "$$log"; \
+		grep -q 'EXCEPTION vector=3' "$$log"; \
+		for marker in $$markers; do grep -q "$$marker" "$$log"; done; \
+		! grep -q 'BOOT_FAIL:' "$$log"; \
+		test "$$(grep -c '^PMM_FREE_PAGES=[0-9][0-9]*' "$$log")" -eq 1; \
+		echo "QEMU $$memory boot test: PASS"; \
+	done; \
+	p16=$$(awk -F= '/^PMM_FREE_PAGES=/{gsub(/\r/, "", $$2); print $$2}' $(BUILD_DIR)/qemu-16M.log); \
+	p64=$$(awk -F= '/^PMM_FREE_PAGES=/{gsub(/\r/, "", $$2); print $$2}' $(BUILD_DIR)/qemu-64M.log); \
+	p128=$$(awk -F= '/^PMM_FREE_PAGES=/{gsub(/\r/, "", $$2); print $$2}' $(BUILD_DIR)/qemu-128M.log); \
+	test "$$p16" -lt "$$p64"; \
+	test "$$p64" -lt "$$p128"; \
+	echo "PMM memory scaling: $$p16 < $$p64 < $$p128"; \
+	echo "QEMU boot matrix: PASS"
 
 clean:
 	rm -rf $(BUILD_DIR)
