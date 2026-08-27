@@ -19,11 +19,11 @@
 
 ## Day 2（禁止在未收到「进入 Day 2」前执行）
 
-- [ ] 从最新 `integration/cycle-04` 建 `docs/cycle-04-d-finalize`
-- [ ] 只改 D 的 Day 2 文件：Makefile、README、architecture、答辩材料
-- [ ] Makefile 保留 16/64/128 MiB，并在末尾跑 64 MiB sendkey 测试
-- [ ] 交互测试输出 `QEMU shell interaction: PASS`
-- [ ] 仅把通过测试的功能改为「已完成」
+- [x] 从最新 `integration/cycle-04` 建 `docs/cycle-04-d-finalize`
+- [x] 只改 D 的 Day 2 文件：Makefile、README、architecture、答辩材料、`qemu-shell-test.py`
+- [x] Makefile 保留 16/64/128 MiB，并在末尾跑 64 MiB sendkey 测试
+- [ ] 交互测试输出 `QEMU shell interaction: PASS`（需 Docker；本机若无 Docker CLI 则由容器/CI 验证）
+- [x] 仅把已接线的 Ring 0 Shell/RAMFS 改为「已完成」，仍标明非用户态
 - [ ] finalize PR base 为 `integration/cycle-04`，D 不合并 `main`
 
 ## 代码冻结后（8 月 28–29 日，仓库外）

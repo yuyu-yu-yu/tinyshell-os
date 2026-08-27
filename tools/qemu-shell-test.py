@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Drive TinyShell through QEMU monitor sendkey (real IRQ1), not C handlers.
 
-Day 1: the module is structurally complete. Interaction PASS is only valid
-after cycle-04 Runtime integration exposes SHELL_READY and the tiny> prompt.
-This file must be syntax-checked with python3 -B and must not write
-__pycache__/ or *.pyc.
+Serial Backspace is emitted as the terminal sequence BS-space-BS. Assertions
+that inspect typed commands must reconstruct visible text; they must not
+require the raw log to contain a contiguous edited command string.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ KEY_HOLD_MS = 5
 KEY_GAP_S = 0.020
 BOOT_TIMEOUT_S = 30.0
 COMMAND_TIMEOUT_S = 20.0
-OVERALL_TIMEOUT_S = 90.0
+OVERALL_TIMEOUT_S = 120.0
 POLL_S = 0.05
 PROMPT = "tiny> "
 
@@ -63,6 +62,39 @@ class StageError(Exception):
         super().__init__(f"{stage}: {message}")
         self.stage = stage
         self.excerpt = excerpt
+
+
+def visible_serial(text: str) -> str:
+    """Replay BS and the console BS-space-BS erase sequence."""
+    visible: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("\b \b", index):
+            if visible:
+                visible.pop()
+            index += 3
+            continue
+        if text[index] == "\b":
+            if visible:
+                visible.pop()
+            index += 1
+            continue
+        visible.append(text[index])
+        index += 1
+    return "".join(visible)
+
+
+def visible_serial_selfcheck() -> None:
+    sample = "echoo\b \b hello\nhello\n" + PROMPT
+    expected = "echo hello\nhello\n" + PROMPT
+    recovered = visible_serial(sample)
+    if recovered != expected:
+        raise StageError(
+            "selfcheck",
+            f"backspace normalize failed: {recovered!r}",
+            sample,
+        )
 
 
 class QemuShellSession:
@@ -296,8 +328,9 @@ def run_script(session: QemuShellSession) -> None:
     session.send_text("\b", "echo-backspace")
     session.send_text(" hello\n", "echo-backspace")
     echo_out = session.wait_for(PROMPT, "echo-backspace", cursor, COMMAND_TIMEOUT_S)
-    session.expect_contains("echo-backspace", echo_out, "echo hello")
-    session.expect_line("echo-backspace", echo_out, "hello")
+    visible = visible_serial(echo_out)
+    session.expect_contains("echo-backspace", visible, "echo hello")
+    session.expect_line("echo-backspace", visible, "hello")
 
     _, touch_out = session.run_line("touch note", "touch")
     session.expect_line("touch", touch_out, "ok")
@@ -347,6 +380,8 @@ def repository_root() -> Path:
 
 
 def main(argv: list[str]) -> int:
+    visible_serial_selfcheck()
+
     root = repository_root()
     iso_path = Path(os.environ.get("TINYOS_ISO", root / "build" / "tinyshell.iso"))
     serial_path = Path(

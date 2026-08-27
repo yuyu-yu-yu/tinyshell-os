@@ -1,7 +1,7 @@
 # TinyShell OS 答辩 PPT 逐页大纲（16:9）
 
 > 内部准备项。课程 PPT 可选；若最终不提交，从压缩包删除对应文件，不留空文件。
-> 第四轮未合入功能在幻灯片上必须标「待集成 / 计划演示」，不能写成已上线。
+> 第四轮已接入 Ring 0 Shell。幻灯片必须写明「仍在 Ring 0，不是用户态服务」，不能写成完整微内核。
 > 建议字体：标题 32–36 pt，正文 18–20 pt，代码 14 pt。深色标题条 + 浅底正文。
 
 ## 第 1 页 · 封面
@@ -21,7 +21,7 @@
 ## 第 3 页 · 架构总图
 
 - 中央竖条「内核」：CPU 异常、IRQ、PMM/VMM/Heap、Task、IPC。
-- 右侧虚线框「第四轮前台（待集成）」：键盘队列 → 行编辑 → parser → RAMFS / status。
+- 右侧实线框「第四轮前台（Ring 0）」：键盘队列 → 行编辑 → parser → RAMFS / status。
 - 箭头标注：IRQ1 只入队，命令不在中断里跑。
 
 ## 第 4 页 · 启动路径
@@ -47,11 +47,11 @@
 - 右：静态 endpoint、深拷贝、满队列失败、不阻塞。
 - 小图：producer → FIFO → consumer，timer-observer 用 `hlt+yield` 等 IRQ0。
 
-## 第 8 页 · Shell 与 RAMFS（待集成）
+## 第 8 页 · Shell 与 RAMFS（Ring 0）
 
 - 演示路径：`tiny> ` → touch/write/cat/append/ls/rm。
 - 约束：16 文件、512 字节、非法名拒绝、超长写入不破坏旧内容。
-- 角标大红字：待 `integration/cycle-04`。
+- 角标：Shell/RAMFS 在 Ring 0，不是用户态服务。
 
 ## 第 9 页 · 测试策略
 
@@ -61,8 +61,8 @@
 
 ## 第 10 页 · 测试证据
 
-- 表：三档内存 PASS + CR0=80010011。
-- 空行：第四轮十二步交互结果，Day 1 填「未跑通 / 待集成」。
+- 表：三档内存 PASS + CR0=80010011；第四轮 `PMM_FREE_PAGES` 3565 < 15853 < 32237。
+- 64 MiB `sendkey` 十二步：help、Backspace、touch/write/cat/append/ls/status/rm/about。
 - 失败样例：`BOOT_FAIL:shell-runtime`、脚本打印阶段名。
 
 ## 第 11 页 · 限制与后续

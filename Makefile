@@ -20,7 +20,7 @@ OBJECTS := \
 	$(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SOURCES)) \
 	$(patsubst %.S,$(BUILD_DIR)/%.o,$(ASM_SOURCES))
 
-.PHONY: all check clean run debug test
+.PHONY: all check clean run debug test test-shell
 
 all: check $(ISO)
 
@@ -53,7 +53,7 @@ debug: check $(ISO)
 
 test: check $(ISO)
 	@set -eu; \
-	markers='CONSOLE_OK GDT_OK IDT_OK MULTIBOOT_OK MEMORY_MAP_OK INT3_TEST_OK PMM_OK PMM_ALLOC_FREE_OK PIC_OK IRQ_OK PIT_OK TIMER_IRQ_OK KEYBOARD_DECODE_OK KEYBOARD_READY PAGING_OK VMM_MAP_OK HEAP_OK HEAP_COALESCE_OK TASK_OK SCHEDULER_OK IPC_OK IPC_TASK_FLOW_OK BOOT_OK'; \
+	markers='CONSOLE_OK GDT_OK IDT_OK MULTIBOOT_OK MEMORY_MAP_OK INT3_TEST_OK PMM_OK PMM_ALLOC_FREE_OK PIC_OK IRQ_OK PIT_OK TIMER_IRQ_OK KEYBOARD_DECODE_OK KEYBOARD_READY PAGING_OK VMM_MAP_OK HEAP_OK HEAP_COALESCE_OK TASK_OK SCHEDULER_OK IPC_OK IPC_TASK_FLOW_OK RAMFS_OK SHELL_INPUT_OK SHELL_PARSE_OK SYSTEM_STATUS_OK SHELL_READY BOOT_OK'; \
 	for memory in $(QEMU_MEMORY_MATRIX); do \
 		log="$(BUILD_DIR)/qemu-$$memory.log"; \
 		clean_log="$$log.clean"; \
@@ -81,6 +81,11 @@ test: check $(ISO)
 	test "$$p64" -lt "$$p128"; \
 	echo "PMM memory scaling: $$p16 < $$p64 < $$p128"; \
 	echo "QEMU boot matrix: PASS"
+	$(MAKE) test-shell
+
+test-shell: $(ISO)
+	@TINYOS_ISO="$(ISO)" TINYOS_QEMU="$(QEMU)" TINYOS_QEMU_MEMORY=64M \
+		python3 -B tools/qemu-shell-test.py
 
 clean:
 	rm -rf $(BUILD_DIR)

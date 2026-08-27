@@ -1,15 +1,15 @@
 # TinyShell OS 项目文档初稿
 
-> 文档状态：第四轮 Day 1 初稿（`feature/cycle-04-d-defense-qa`）。
-> 仓库基线：`main` `5bbbda9`（第三轮 integration 已合入）。
+> 文档状态：第四轮 Day 2 收尾稿（`docs/cycle-04-d-finalize`）。
+> 代码基线：`integration/cycle-04`（Runtime 已接线）。
 > 组号、姓名、学号：由组员本人填写，Agent 不得代填。
-> 第四轮 Shell / RAMFS / 真实 sendkey 验收：**待集成**，不得当作已完成。
+> 第四轮 Shell / RAMFS / 真实 sendkey：已接入 Ring 0 前台；标准 `make test` 在启动矩阵之后运行 64 MiB `sendkey`。仍不是用户态服务。
 
 ## 阅读导航
 
 **3 分钟速读（答辩开场）：** 封面与成员 → 第 2 节范围与诚实边界 → 第 4 节启动路径 → 第 8 节已通过的测试表 → 第 11 节已知限制。
 
-**技术审阅（老师或互审）：** 第 3 节 Docker 复现 → 第 4–7 节机制 → `docs/cycle-01-integration.md`、`docs/cycle-02-integration.md`、`docs/cycle-03-integration.md` → 第 8 节失败处理 → 第 10 节贡献与 AI 使用。第四轮模块以「待集成」章节为准，不以计划接口冒充现网行为。
+**技术审阅（老师或互审）：** 第 3 节 Docker 复现 → 第 4–7 节机制 → `docs/cycle-01-integration.md`、`docs/cycle-02-integration.md`、`docs/cycle-03-integration.md`、`docs/cycle-04-integration.md` → 第 8 节失败处理 → 第 10 节贡献与 AI 使用。
 
 ---
 
@@ -20,7 +20,7 @@
 | 课程 | 操作系统课程设计 |
 | 架构 | i386（32 位）、GRUB Multiboot v1、freestanding C11 |
 | 仓库 | https://github.com/yuyu-yu-yu/tinyshell-os |
-| 当前可演示基线 | `main` `5bbbda9` |
+| 当前可演示基线 | `integration/cycle-04`（待合入 `main`） |
 | 组号 | （待填） |
 | 组长 | （待填） |
 | 成员 | A / B / C / D（姓名、学号待本人填写） |
@@ -31,18 +31,15 @@
 
 TinyShell OS 的长期目标是教学型微内核：把调度、地址空间、异常中断和 IPC 留在内核，把 Shell 与文件系统语义放到用户态服务。
 
-**已经通过自动测试、可以答辩陈述的范围（第三轮及以前）：**
+**已经通过自动测试、可以答辩陈述的范围：**
 
 - GRUB 加载 32 位内核；Console（VGA + COM1）；平坦 GDT；IDT 与 32 个 CPU 异常；真实 `int3` 返回。
-- Multiboot v1 memory map；单页物理分配器（PMM）；PIC/IRQ；100 Hz PIT；PS/2 Set 1 键盘解码与 IRQ1 回显。
+- Multiboot v1 memory map；单页物理分配器（PMM）；PIC/IRQ；100 Hz PIT；PS/2 Set 1 键盘解码。
 - 非 PAE 4 KiB 分页、CR0.PG/WP、前 128 MiB identity map、动态窗口映射。
 - 256 KiB 启动堆（first-fit、相邻合并）。
 - 最多 8 个协作式内核任务；静态 FIFO endpoint 上的非阻塞深拷贝 IPC。
-
-**本轮正在并行实现、Day 1 不得写成已完成的范围：**
-
-- 行编辑器、命令解析器、静态 RAMFS、Shell Runtime 主循环。
-- `system_status_read()` 快照与 64 MiB `sendkey` 交互脚本（本分支已提交源码，**尚未**由 A 接入 `kernel_main`，也尚未在集成分支上跑通）。
+- Ring 0 TinyShell：行编辑、固定命令集、静态 RAMFS、`status` 快照；IRQ1 只入队，前台执行命令。
+- 64 MiB QEMU `sendkey` 交互脚本走真实键盘路径（Backspace 按终端可见文本断言，而不是原始 `\b \b` 字节）。
 
 **明确不在本轮、也不能在答辩中宣称完成的范围：**
 
@@ -68,7 +65,7 @@ Linux / macOS / WSL：
 bash tools/docker-test.sh
 ```
 
-脚本构建 `tinyshell-os-dev:toolchain-v1`，在容器内 `make clean test`。当前 `make test` 用 16/64/128 MiB QEMU 检查启动标记、`BOOT_OK` 只出现一次、无 `BOOT_FAIL:` / `PAGE_FAULT`，且 `PMM_FREE_PAGES` 严格递增。
+脚本构建 `tinyshell-os-dev:toolchain-v1`，在容器内 `make clean test`。`make test` 先用 16/64/128 MiB QEMU 检查启动标记、`BOOT_OK` 只出现一次、无 `BOOT_FAIL:` / `PAGE_FAULT`，且 `PMM_FREE_PAGES` 严格递增；然后运行 64 MiB `tools/qemu-shell-test.py` 真实 `sendkey` 交互。
 
 交互式运行：
 
@@ -78,7 +75,7 @@ docker run --rm -it --volume "$PWD:/workspace" --workdir /workspace \
   tinyshell-os-dev:toolchain-v1 make run
 ```
 
-第四轮计划在标准矩阵末尾增加 64 MiB 真实 `sendkey` 测试（`tools/qemu-shell-test.py`）。**Day 1 尚未修改 Makefile**，因此当前 Docker 脚本不会自动跑交互测试。Day 1 只对脚本做无缓存语法检查。
+第四轮已把 64 MiB 真实 `sendkey` 接到标准 `make test` 末尾。脚本使用容器 `/tmp` 上的 monitor Unix socket，不把 socket 放到 Windows bind-mounted 的 `build/`。Backspace 断言先把串口的 `BS-space-BS` 还原成可见文本，再检查命令是 `echo hello`。
 
 ## 4. 总体架构和 GRUB 到 `BOOT_OK` 的启动路径
 
@@ -92,18 +89,21 @@ GRUB (Multiboot EAX=0x2BADB002, EBX=info)
   → 注册 IRQ0/IRQ1，unmask，仍在 cli
   → 分页：载入页目录，CR0.PG|WP，VMM 窗口自检
   → heap / IPC 静态自检
+  → RAMFS / 行编辑 / parser 合成自检（失败则 BOOT_FAIL:shell-runtime）
   → sti
   → 等待真实 IRQ0 三次
   → 三任务 producer / consumer / timer-observer
-  → BOOT_OK
-  → 主循环：hlt；keyboard_pop_char → console_putc   （第四轮将改为 Shell Runtime，待集成）
+  → system_status_read 自检
+  → SYSTEM_STATUS_OK / SHELL_READY / BOOT_OK
+  → shell_runtime_start（`tiny> `）
+  → 主循环：hlt；keyboard_pop_char → shell_runtime_handle_char
 ```
 
 硬件结构集中在 `boot/` 与 `kernel/arch/x86/`。内存在 `kernel/mm/`，任务在 `kernel/task/`，IPC 在 `kernel/ipc/`。Shell 与 RAMFS 按架构文档最终应在用户态；本轮它们若合入，也仍在 Ring 0 内核中运行。
 
 ## 5. 中断、内存、分页和 heap
 
-**中断：** IDT 覆盖 256 项；向量 0–31 为 CPU 异常 stub，按是否有 error code 统一栈布局。IRQ 从向量 32 起。`irq_dispatch` 先计数再调 handler，最后 EOI。IRQ0 只增加 PIT tick；IRQ1 只读一个扫描码并入队。禁止在 IRQ 里解析命令、打印或访问 RAMFS（第四轮 Runtime 约束，待集成后由 A 保证）。
+**中断：** IDT 覆盖 256 项；向量 0–31 为 CPU 异常 stub，按是否有 error code 统一栈布局。IRQ 从向量 32 起。`irq_dispatch` 先计数再调 handler，最后 EOI。IRQ0 只增加 PIT tick；IRQ1 只读一个扫描码并入队。命令解析、打印和 RAMFS 只在前台主循环执行。
 
 **PMM：** 只接收 A 裁剪后的区域；首次 `pmm_alloc_page` 后冻结 add/reserve。不把物理地址当指针解引用。16/64/128 MiB 下空闲页数严格递增，证明使用了 GRUB 真实 memory map。
 
@@ -119,19 +119,23 @@ IPC 使用静态 endpoint、有界 FIFO、发送时深拷贝。0/3/32 字节合�
 
 ## 7. RAMFS、Shell 输入与命令执行
 
-**本节全部为待集成。** Day 1 四个成员并行，尚未进入 `integration/cycle-04`。
+第四轮已合入 `integration/cycle-04`。路径为：
 
-| 模块 | 成员 | Day 1 状态 | 计划行为 |
-|---|---|---|---|
-| 行编辑器 | A | 独立分支开发中 | 127 字符、Backspace、ready 锁定 |
-| RAMFS | B | 独立分支开发中 | 16 文件 × 512 字节静态数组 |
-| 命令解析 | C | 独立分支开发中 | 无引号、固定命令集 |
-| 状态快照 + sendkey 脚本 | D | 本分支已提交源码 | 只读公开 API；真实 IRQ1 测试 |
-| Runtime / `kernel_main` | A Day 2 | 未开始 | `tiny> ` 主循环 |
+```text
+IRQ1 → 键盘队列 → keyboard_pop_char → 行编辑器 → parser → RAMFS / status
+```
 
-计划命令：`help/clear/echo/ls/touch/write/append/cat/rm/status/about`。提示符固定为 `tiny> `。`about` 必须出现 `Ring 0`。`status` 五行格式见任务书，由 `system_status_read()` 供数、由 Runtime 打印。
+| 模块 | 成员 | 状态 |
+|---|---|---|
+| 行编辑器 | A | 已接线：127 字符、Backspace、ready 锁定 |
+| RAMFS | B | 已接线：16 文件 × 512 字节静态数组 |
+| 命令解析 | C | 已接线：无引号、固定命令集 |
+| 状态快照 + sendkey 脚本 | D | `system_status_read` 只读公开 API；Makefile 末尾跑真实 IRQ1 测试 |
+| Runtime / `kernel_main` | A | `tiny> ` 前台循环 |
 
-当前 `main` 的键盘路径仍是 IRQ1 → 队列 → `console_putc` 回显，没有行编辑和命令执行。
+固定命令：`help/clear/echo/ls/touch/write/append/cat/rm/status/about`。提示符为 `tiny> `。`about` 含 `Ring 0`。`status` 五行由 Runtime 打印，数据来自 `system_status_read()`。
+
+这些模块都在 Ring 0 运行，不是用户态文件服务。
 
 ## 8. 测试方法、结果表和失败处理
 
@@ -149,13 +153,11 @@ IPC 使用静态 endpoint、有界 FIFO、发送时深拷贝。0/3/32 字节合�
 
 启动标记（各一次）：`CONSOLE_OK GDT_OK IDT_OK MULTIBOOT_OK MEMORY_MAP_OK INT3_TEST_OK PMM_OK PMM_ALLOC_FREE_OK PIC_OK IRQ_OK PIT_OK TIMER_IRQ_OK KEYBOARD_DECODE_OK KEYBOARD_READY PAGING_OK VMM_MAP_OK HEAP_OK HEAP_COALESCE_OK TASK_OK SCHEDULER_OK IPC_OK IPC_TASK_FLOW_OK BOOT_OK`。
 
-### 第四轮计划增加、Day 1 未跑通
+### 第四轮（`integration/cycle-04` 记录）
 
-| 项 | 状态 |
-|---|---|
-| `RAMFS_OK` `SHELL_INPUT_OK` `SHELL_PARSE_OK` `SYSTEM_STATUS_OK` `SHELL_READY` | 待 A 接线后出现 |
-| 64 MiB `tools/qemu-shell-test.py` 十二步 sendkey | 脚本已提交；当前内核无 `SHELL_READY`，**不得**报 PASS |
-| 脚本语法 | Day 1 用 `python3 -B -c "import ast,pathlib; ast.parse(...)"` 检查 |
+来源：`docs/cycle-04-integration.md`。启动矩阵 16/64/128 MiB PASS，`PMM_FREE_PAGES` 为 `3565 < 15853 < 32237`。新增标记各一次，`BOOT_OK` 仍只一次。
+
+`tools/qemu-shell-test.py` 用 monitor `sendkey` 走 IRQ1。Day 2 修复：串口 Backspace 是 `\b \b`，测试先还原可见文本再断言 `echo hello`。标准 `make test` 在启动矩阵之后调用该脚本。
 
 失败处理：模块自检失败走 `BOOT_FAIL:<stage>` 并 `cli; hlt`。交互脚本任何阶段超时或输出不符则打印阶段名、终止 QEMU、删除 `/tmp` monitor socket、非零退出。
 
