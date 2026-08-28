@@ -66,7 +66,7 @@ All `echo`, `write`, and `append` text is joined in a fixed 256-byte buffer with
 - PMM free pages: `3565 < 15853 < 32237`.
 - All original third-round markers remain, all five new markers appear once, `BOOT_OK` appears once, and no `BOOT_FAIL:` or `PAGE_FAULT` appears.
 - Real 64 MiB QEMU monitor `sendkey` path: help, Backspace, echo, touch, write, cat, append, ls, two status snapshots, rm, missing-file error, empty listing, unknown command and Ring 0 about output all PASS.
-- The Day 1 interaction script currently performs one incorrect raw-log assertion for Backspace: it searches for contiguous `echo hello` even though the serial terminal correctly emits `echoo\\b \\b hello`. A temporary ignored wrapper skipped only that assertion; all remaining stages passed. D must normalize terminal Backspace bytes or assert the edited command through its output before enabling the script in the standard Makefile target.
+- Day 2 finalization fixed the former raw-log Backspace assertion by replaying the serial `BS-space-BS` erase sequence as visible terminal text. `Makefile` now checks the five cycle-04 markers and runs the complete 64 MiB interaction script after the boot matrix. The finalization commit `2414591` entered this branch through PR #19, and the standard Docker test reports `QEMU shell interaction: PASS` without skipped assertions.
 
 ## Known limits
 

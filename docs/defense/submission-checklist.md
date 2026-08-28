@@ -10,11 +10,11 @@
 - [x] 实现 `include/diag/system_status.h`、`kernel/diag/system_status.c`
 - [x] 实现 `tools/qemu-shell-test.py`（结构完整；不伪称交互 PASS）
 - [x] 答辩初稿五件套位于 `docs/defense/`
-- [ ] 基线 Docker `tools/docker-test.ps1` 在本机执行（当前 Windows 环境无 Docker CLI / Docker Desktop，见 PR 说明）
+- [x] 第四轮最终分支已在 Docker 中执行完整 16/64/128 MiB 启动矩阵
 - [x] `python3 -B` 语法检查 `qemu-shell-test.py`（PASS）
 - [x] 临时 mock 测试（仅 `build/`，不提交；宿主 gcc 64 位 PASS；另用 `-m32 -Werror` 编译 `system_status.c` PASS）
 - [x] `git diff --check`、逐文件 `git add`、安全扫描脚本不存在，已人工阅读 `git diff --cached`（无密钥/环境文件/生成物）
-- [ ] 推送分支并创建 base=`main` 的 Draft PR
+- [x] Day 1 提交 `cc3076b` 已通过独立 merge commit 进入 `integration/cycle-04`
 - [ ] A/B/C 的一页说明与五问五答已收齐（Day 1 结束前他们提交）
 
 ## Day 2（禁止在未收到「进入 Day 2」前执行）
@@ -22,9 +22,16 @@
 - [x] 从最新 `integration/cycle-04` 建 `docs/cycle-04-d-finalize`
 - [x] 只改 D 的 Day 2 文件：Makefile、README、architecture、答辩材料、`qemu-shell-test.py`
 - [x] Makefile 保留 16/64/128 MiB，并在末尾跑 64 MiB sendkey 测试
-- [ ] 交互测试输出 `QEMU shell interaction: PASS`（需 Docker；本机若无 Docker CLI 则由容器/CI 验证）
+- [x] 完整 Docker 测试输出 `QEMU shell interaction: PASS`，未跳过 Backspace 断言
 - [x] 仅把已接线的 Ring 0 Shell/RAMFS 改为「已完成」，仍标明非用户态
-- [ ] finalize PR base 为 `integration/cycle-04`，D 不合并 `main`
+- [x] finalize PR #19 的 base 为 `integration/cycle-04`，且已合入集成分支
+
+## 合入 main 与代码冻结
+
+- [ ] PR #18 在包含 PR #19 和文档事实修订后重新运行 Docker CI，并显示成功
+- [ ] PR #18 转为 Ready 后合入 `main`
+- [ ] `main` push CI 成功，记录最终提交和 CI URL
+- [ ] 四人补齐材料，D 的最终文档 PR 合入且 main CI 通过后，再创建 annotated 答辩 tag
 
 ## 代码冻结后（8 月 28–29 日，仓库外）
 
@@ -51,7 +58,7 @@
 - [ ] 四人都能讲解本人模块的正常路径、两个失败边界、一个限制
 - [ ] 确认老师公布的实际答辩时间（若早于 8 月 31 日则提前发件）
 - [ ] 组长发邮件到 `wang.box@163.com`
-- [ ] 标题：`[组号]组[组长姓名]操作系统课程设计答辩`
+- [ ] 标题严格使用老师原文格式：`组号组长姓名操作系统课程设计答辩`（替换为真实内容，不额外增加“组”）
 - [ ] 组长 QQ 私信王老师确认已提交
 - [ ] 准备现场陈述；备用 60–90 秒录像在仓库外
 

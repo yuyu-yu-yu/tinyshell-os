@@ -1,4 +1,4 @@
-# TinyShell OS 项目文档初稿
+# TinyShell OS 项目文档（答辩内容稿）
 
 > 文档状态：第四轮 Day 2 收尾稿（`docs/cycle-04-d-finalize`）。
 > 代码基线：`integration/cycle-04`（Runtime 已接线）。
@@ -20,7 +20,7 @@
 | 课程 | 操作系统课程设计 |
 | 架构 | i386（32 位）、GRUB Multiboot v1、freestanding C11 |
 | 仓库 | https://github.com/yuyu-yu-yu/tinyshell-os |
-| 当前可演示基线 | `integration/cycle-04`（待合入 `main`） |
+| 当前可演示基线 | `integration/cycle-04`，总集成 PR #18 |
 | 组号 | （待填） |
 | 组长 | （待填） |
 | 成员 | A / B / C / D（姓名、学号待本人填写） |
@@ -171,14 +171,14 @@ IRQ1 → 键盘队列 → keyboard_pop_char → 行编辑器 → parser → RAMF
 
 ## 10. 四人真实贡献、AI 使用和参考来源
 
-**本表在 Day 1 结束前只填写已发生的事实。A/B/C 的模块说明待本人提交后由 D 核验填入，不得代写贡献。**
+**下表只记录仓库中已经发生的模块工作。真实姓名、具体贡献比例和本人修改内容必须由四位成员逐项核对，不能根据 Git 提交者或 Agent 记录推断。**
 
-| 成员 | 已合入 main 的工作（前三轮，据集成记录） | 第四轮 Day 1 |
+| 成员 | 已合入 main 的工作（前三轮，据集成记录） | 第四轮已集成工作 |
 |---|---|---|
-| A | Multiboot 解析与各轮 `kernel_main` 集成、分页 | 行编辑器（独立分支，待合入） |
-| B | GDT、PMM、启动堆 | RAMFS（独立分支，待合入） |
-| C | IDT/异常、PIC/IRQ、协作任务 | parser（独立分支，待合入） |
-| D | Console、PIT/键盘、IPC | 本分支：`system_status_*`、`qemu-shell-test.py`、答辩初稿 |
+| A | Multiboot 解析与各轮 `kernel_main` 集成、分页 | 行编辑器、Runtime 与第四轮内核接线 |
+| B | GDT、PMM、启动堆 | 静态 RAMFS |
+| C | IDT/异常、PIC/IRQ、协作任务 | 固定命令解析器 |
+| D | Console、PIT/键盘、IPC | 状态快照、真实 `sendkey` 测试、测试门禁与答辩材料框架 |
 
 AI 使用：成员 D 的 Day 1 实现由 Agent 辅助起草，组员必须逐行审查、亲自运行测试并能够口头解释后才能合并。课程 A 级“至少一半代码量由项目组完成”须向老师确认统计口径；无法证明时不得宣称满足。
 
@@ -200,7 +200,7 @@ AI 使用：成员 D 的 Day 1 实现由 Agent 辅助起草，组员必须逐行
 ## 12. GitHub 地址、最终提交和 Docker 命令
 
 - 仓库：https://github.com/yuyu-yu-yu/tinyshell-os
-- Day 1 本分支：`feature/cycle-04-d-defense-qa`（Draft PR，base=`main`，不得自行合并）
-- 当前稳定提交：`5bbbda9`
+- 第四轮总集成：`integration/cycle-04`，PR #18；D 的 Day 2 收口通过 PR #19 合入该分支。
+- 最终不可变提交与答辩 tag：在最终文档 PR 合入 `main` 且新一轮 main CI 通过后填写，禁止提前写入临时 SHA。
 - 复现：`powershell -ExecutionPolicy Bypass -File tools/docker-test.ps1` 或 `bash tools/docker-test.sh`
 - 答辩压缩包在**仓库外**制作，不含 `.git`、`build/`、镜像、密钥。邮件由组长发送至 `wang.box@163.com`，格式见 `docs/defense/submission-checklist.md`。
