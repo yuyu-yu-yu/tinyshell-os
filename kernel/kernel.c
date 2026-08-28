@@ -6,10 +6,12 @@
 #include "arch/x86/pit.h"
 #include "boot/multiboot.h"
 #include "console.h"
+#include "diag/system_status.h"
 #include "ipc/ipc.h"
 #include "mm/heap.h"
 #include "mm/pmm.h"
 #include "mm/vmm.h"
+#include "shell/runtime.h"
 #include "task/task.h"
 
 #include <stdbool.h>
@@ -549,6 +551,7 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_address)
     uint32_t free_before;
     uint32_t tick_start;
     uint32_t irq_start;
+    struct system_status status;
 
     __asm__ volatile ("cli" : : : "memory");
 
@@ -679,6 +682,13 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_address)
     }
     console_write("IPC_OK\n");
 
+    if (!shell_runtime_init()) {
+        boot_fail("shell-runtime");
+    }
+    console_write("RAMFS_OK\n");
+    console_write("SHELL_INPUT_OK\n");
+    console_write("SHELL_PARSE_OK\n");
+
     tick_start = pit_ticks();
     irq_start = irq_count(0U);
     __asm__ volatile ("sti" : : : "memory");
@@ -695,14 +705,29 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_address)
     console_write("TASK_OK\n");
     console_write("SCHEDULER_OK\n");
     console_write("IPC_TASK_FLOW_OK\n");
+
+    if (!system_status_read(&status)
+        || status.pmm_total_pages == 0U
+        || status.pmm_free_pages == 0U
+        || status.heap_total_bytes == 0U
+        || status.pit_ticks < PIT_TEST_TICKS
+        || status.irq0_count < PIT_TEST_TICKS
+        || status.keyboard_dropped != 0U
+        || status.task_switches < TASK_FLOW_MIN_SWITCHES
+        || status.task_finished != 3U) {
+        boot_fail("system-status");
+    }
+    console_write("SYSTEM_STATUS_OK\n");
+    console_write("SHELL_READY\n");
     console_write("BOOT_OK\n");
+    shell_runtime_start();
 
     for (;;) {
         char character;
 
         __asm__ volatile ("hlt");
         while (keyboard_pop_char(&character)) {
-            console_putc(character);
+            shell_runtime_handle_char(character);
         }
     }
 }

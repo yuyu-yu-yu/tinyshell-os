@@ -2,7 +2,7 @@
 
 基于 x86（i386）的教学型微内核操作系统课程设计。
 
-当前基线已完成三轮：GRUB Multiboot 加载 32 位内核，内核初始化 Console、GDT 和 IDT，解析 BIOS memory map，管理物理页，并驱动 PIC、PIT 和 PS/2 键盘。在此基础上，内核已启用 i386 分页和 256 KiB 启动堆，可运行协作式内核任务，并通过静态 FIFO endpoint 传递拷贝式 IPC 消息。
+当前基线已完成四轮。内核仍由 GRUB Multiboot 加载 32 位镜像，并初始化 Console、GDT、IDT、BIOS memory map、PMM、PIC、PIT、PS/2 键盘、分页、启动堆、协作任务和拷贝式 IPC。第四轮在 Ring 0 接入可交互 TinyShell：真实 IRQ1 字符进入有界队列，前台主循环做行编辑、命令解析，并操作静态 RAMFS。这是教学型微内核原型，Shell 与 RAMFS 尚未放到用户态。
 
 ## 统一开发环境
 
@@ -24,7 +24,7 @@ Linux、macOS 或 WSL：
 bash tools/docker-test.sh
 ```
 
-脚本会构建 `tinyshell-os-dev:toolchain-v1` 镜像，在容器内编译内核、生成 ISO，并用无图形 QEMU 完成启动测试。
+脚本会构建 `tinyshell-os-dev:toolchain-v1` 镜像，在容器内编译内核、生成 ISO，先跑 16/64/128 MiB 启动矩阵，再跑 64 MiB 真实 QEMU `sendkey` 交互测试。
 
 VS Code 用户可以安装 Dev Containers 扩展，然后选择 **Dev Containers: Reopen in Container**。容器创建后会自动检查工具链并运行测试。
 
@@ -46,8 +46,10 @@ Docker 测试应检查：
 
 1. 内核是有效的 x86 Multiboot 镜像。
 2. 能生成 `build/tinyshell.iso`。
-3. QEMU 分别以 16、64、128 MiB 启动，串口日志包含 Multiboot、PMM、PIC/IRQ、PIT、键盘、分页、堆、任务和 IPC 标记，最后才输出 `BOOT_OK`。
+3. QEMU 分别以 16、64、128 MiB 启动，串口日志包含原有启动标记以及 `RAMFS_OK`、`SHELL_INPUT_OK`、`SHELL_PARSE_OK`、`SYSTEM_STATUS_OK`、`SHELL_READY`，并且 `BOOT_OK` 只出现一次。
 4. 三档 `PMM_FREE_PAGES` 严格递增，证明 PMM 使用了 GRUB 提供的真实内存图。
+5. 日志不含 `BOOT_FAIL:` 或 `PAGE_FAULT`。
+6. 64 MiB 下 `tools/qemu-shell-test.py` 通过 QEMU monitor `sendkey` 走真实 IRQ1，完成 help、Backspace、touch/write/cat/append/ls/rm、两次 `status` 和 `about`，并输出 `QEMU shell interaction: PASS`。不得用直接调用 parser 或 keyboard handler 代替该测试。
 
 ## 目录结构
 
@@ -73,3 +75,4 @@ build/      生成物，不提交 Git
 - [`docs/agent-brief-cycle-02.md`](docs/agent-brief-cycle-02.md)：2026-08-21 至 2026-08-22 加速轮次
 - [`docs/agent-brief-cycle-03.md`](docs/agent-brief-cycle-03.md)：2026-08-25 至 2026-08-26 分页、启动堆、协作任务与 IPC
 - [`docs/cycle-03-integration.md`](docs/cycle-03-integration.md)：第三轮实际合并、启动路径与测试证据
+- [`docs/cycle-04-integration.md`](docs/cycle-04-integration.md)：第四轮 Ring 0 Shell / RAMFS 集成记录
