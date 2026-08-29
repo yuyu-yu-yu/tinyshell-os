@@ -1,42 +1,114 @@
-# TinyShell OS 架构边界
+# TinyShell OS 架构
 
-## 目标
+## 项目定位
 
-TinyShell OS 是一个教学型 i386 微内核。最终系统把调度、地址空间、异常中断和 IPC 留在内核，把 Shell 与文件系统语义放到用户态服务。
+TinyShell OS 是一个面向操作系统课程设计的 i386 教学型微内核原型。内核实现单内核地址空间、页映射、中断、调度和 IPC 等基础机制，并在 Ring 0 中提供可交互 Shell 与静态 RAMFS，用于演示完整运行链路。
 
-## 计划模块
+当前实现只有一个内核地址空间。Shell 和 RAMFS 不是用户态服务；系统也没有 TSS、Ring 3、系统调用或用户态隔离。
 
-| 模块 | 目录 | 责任 |
+## 模块划分
+
+| 模块 | 目录 | 主要职责 |
 |---|---|---|
-| x86 启动与硬件抽象 | `boot/`、`kernel/arch/x86/` | Multiboot、GDT、IDT、PIC、PIT、键盘 |
-| 内存管理 | `kernel/mm/` | 物理页、分页、用户地址空间 |
-| 任务与调度 | `kernel/task/` | 任务状态、上下文切换、轮转调度 |
-| 系统调用与 IPC | `kernel/ipc/` | 用户态入口、消息发送与接收 |
-| 文件服务 | `kernel/fs/`（计划：`servers/fs/`） | 当前为内核内静态 RAMFS；用户态文件服务尚未实现 |
-| Shell | `kernel/shell/`（计划：`user/shell/`） | 当前为 Ring 0 行编辑、parser 与 Runtime；用户态 Shell 尚未实现 |
-| 诊断快照 | `kernel/diag/` | 只读系统状态，供 `status` 使用 |
+| 启动与 CPU 基础 | `boot/`、`kernel/arch/x86/` | Multiboot、GDT、IDT、异常入口、上下文切换 |
+| Console | `kernel/console/`、`kernel/serial.c` | VGA 文本和 COM1 串口输出 |
+| 内存管理 | `kernel/boot/`、`kernel/mm/` | 内存图、物理页、分页和启动堆 |
+| 中断与设备 | `kernel/arch/x86/` | PIC、IRQ、PIT 和 PS/2 键盘 |
+| 任务与 IPC | `kernel/task/`、`kernel/ipc/` | 协作任务、轮转调度和固定消息队列 |
+| Shell 与 RAMFS | `kernel/shell/`、`kernel/fs/` | 行编辑、命令解析、命令执行和内存文件 |
+| 系统诊断 | `kernel/diag/` | 只读运行状态快照 |
 
-## 当前里程碑
+## 启动流程
 
-前两轮已实现统一 Console、平坦 GDT、32 个 CPU 异常入口、IDT、Multiboot v1 memory map、单页 PMM、PIC/IRQ、100 Hz PIT 和 PS/2 Set 1 键盘解码。内核用真实 `int3` 检查异常返回，用真实 IRQ0 检查中断路径。
+```text
+GRUB (Multiboot EAX=0x2BADB002, EBX=info)
+  → console_init
+  → gdt_init / idt_init / int3 回归
+  → 校验 Multiboot memory map
+  → PMM 导入 usable 区并保留低端、内核和启动数据
+  → PIC / PIT / keyboard 初始化
+  → paging / VMM / heap / IPC 自检
+  → RAMFS / line editor / parser 自检
+  → sti
+  → 等待真实 IRQ0
+  → producer / consumer / timer-observer 任务流
+  → SYSTEM_STATUS_OK / SHELL_READY / BOOT_OK
+  → TinyShell 前台循环
+```
 
-第三轮已实现非 PAE、4 KiB 页的单内核地址空间，启用 CR0.PG 和 CR0.WP，并 identity-map 前 128 MiB。动态窗口可映射 PMM 页，256 KiB 静态堆提供 first-fit 分配和相邻块合并。协作式 round-robin 调度器可运行 8 个内核任务，静态 endpoint 为任务提供非阻塞、深拷贝 FIFO IPC。
+任一受检初始化步骤失败都会输出 `BOOT_FAIL:<stage>`，随后执行 `cli; hlt`。`BOOT_OK` 只在全部初始化和自检完成后输出一次。
 
-第四轮已接入 Ring 0 可交互 Shell：IRQ1 只把扫描码译成字符并入队；`kernel_main` 在 `hlt` 后用 `keyboard_pop_char()` 把字符交给 Runtime。行编辑器、命令解析器和 16×512 字节静态 RAMFS 都在普通内核上下文运行。`status` 通过公开 `system_status_read()` 取样。标准 `make test` 在 16/64/128 MiB 启动矩阵之后，用 64 MiB QEMU `sendkey` 证明完整 IRQ1 链路。
+## 内存管理
 
-Ring 3、TSS、系统调用、抢占调度、阻塞 IPC、用户地址空间和磁盘文件系统仍未实现。Shell 与 RAMFS 目前不能称为用户态服务。文档和答辩只能把通过自动测试的功能描述成已完成功能。
+### Multiboot 与 PMM
 
-## 设计约束
+Multiboot 层先完整校验 memory map，再把每个区域交给 PMM。PMM 以 4 KiB 为单位管理物理页，并显式保留：
 
-- 内核代码使用 freestanding C11，不依赖宿主机 libc。
+- 0–1 MiB 低端内存；
+- 内核镜像和内核栈；
+- Multiboot info 与 memory map 缓冲区；
+- 固件标记为不可用的区域。
+
+PMM 采用 reserved-wins 语义。首次分配后，`add` 和 `reserve` 操作会被拒绝，防止活跃分配期间改变页的归属。
+
+### 分页与 VMM
+
+VMM 使用非 PAE、4 KiB 页的单内核地址空间：
+
+- 前 128 MiB identity-map，第 0 页保持 non-present；
+- CR0.PG 和 CR0.WP 均开启；
+- `0x40000000–0xF0000000` 用作动态映射窗口；
+- 32 张静态页表负责 identity map，另 32 张用于动态映射；
+- `vmm_unmap_page()` 只解除映射，物理页由所有者调用 PMM 释放。
+
+Page fault handler 输出 CR2、error code 和访问类型后停机，不执行恢复。
+
+### 启动堆
+
+Heap 使用 BSS 中 256 KiB 静态 arena，返回地址按 16 字节对齐。分配器采用 first-fit，支持块拆分和前后相邻块合并。它不向 PMM 扩容，也不保证并发安全，因此不能在 IRQ handler 中调用。
+
+## 中断与设备
+
+IDT 包含 256 项。向量 0–31 对应 CPU 异常，硬件 IRQ 经 PIC 重映射到向量 32–47。IRQ dispatcher 统一完成三件事：记录次数、调用已注册 handler、发送 EOI。
+
+PIT 配置为 100 Hz，IRQ0 handler 只增加 tick。PS/2 IRQ1 handler 每次最多读取一个扫描码，完成 Set 1 解码后把字符放入 64 字节队列。中断上下文不打印、不解析命令，也不访问 RAMFS。
+
+## 任务与 IPC
+
+任务系统最多保存 8 个内核任务，每个任务使用 16 KiB 静态栈。上下文切换保存 ESP、EBP、EBX、ESI、EDI 和 EFLAGS。调度器使用协作式 round-robin：任务只在 `yield`、`exit` 或入口返回时切换；IRQ 不触发抢占。
+
+IPC 提供 8 个静态 endpoint。每个 endpoint 是深度为 8 的 FIFO，单条 payload 最大 32 字节。发送执行深拷贝；队列满时拒绝新消息，不覆盖旧消息。接口非阻塞，也不会自动 `yield`。
+
+## Shell、RAMFS 与状态
+
+Shell 的输入路径为：
+
+```text
+PS/2 IRQ1 → keyboard queue → keyboard_pop_char
+          → line editor → parser → command runtime
+          → RAMFS / system status
+```
+
+字符出队、命令解析和文件操作都在前台普通内核上下文完成。行编辑器支持 Enter 和 Backspace；parser 使用固定数组，不依赖 libc 或动态内存。
+
+RAMFS 使用 16 个静态文件槽，每个文件最多 512 字节。它支持创建、覆盖、追加、读取、删除和槽位复用，但不支持目录、持久化或并发访问。
+
+`status` 通过公开接口读取 PMM、Heap、PIT、IRQ0、键盘和任务统计。快照先写入局部对象，全部读取成功后再更新调用者输出。
+
+## 关键约束
+
+- 内核使用 freestanding C11，不依赖宿主机 libc。
 - 硬件相关代码集中在 x86 架构目录。
-- 公共接口先写头文件，再分别实现与测试。
-- 每个新模块都要有串口自测输出，最终由 `make test` 自动验证。
-- 引用外部代码必须记录来源与许可证；核心算法必须由组员理解并能答辩。
-- PMM 在首次分配后冻结物理页归属；当前启动阶段的内存和设备初始化都在 `sti` 前完成。
-- IRQ handler 只做有界的无阻塞工作；IRQ dispatcher 统一记数并发送 EOI。
-- VMM 只负责虚拟映射，`vmm_unmap_page()` 不释放物理页；物理页所有者负责调用 PMM 释放。
-- 启动堆、任务栈、页表和 IPC 队列仍使用静态 BSS，优先保持本轮实现的可解释性和确定性。
-- 协作任务只在主动 yield 或 exit 时切换；IRQ 不执行调度，IPC 也不会自动阻塞或 yield。
-- IRQ1 handler 只读取一个扫描码并入键盘队列；禁止在中断中解析命令、打印或访问 RAMFS。
-- 当前 RAMFS 与 Shell 使用静态数组和固定缓冲区，不从 heap 分配，也不提供目录、引号、管道或命令历史。
+- 启动阶段的内存和设备初始化在 `sti` 前完成。
+- IRQ handler 只做有界、无阻塞的工作；dispatcher 统一发送 EOI。
+- 页表、Heap、任务栈和 IPC 队列使用固定容量静态存储。
+- 协作任务依赖主动让出 CPU；IPC 不阻塞，也不触发调度。
+- Shell 与 RAMFS 运行在 Ring 0，不具备用户态故障隔离。
+
+## 未实现功能
+
+- TSS、Ring 3、系统调用和用户地址空间；
+- 抢占调度、优先级、睡眠和多核同步；
+- 阻塞 IPC、endpoint 销毁和访问控制；
+- 磁盘驱动、持久化文件系统和目录；
+- Shell 管道、重定向、引号、历史、补全和外部程序。

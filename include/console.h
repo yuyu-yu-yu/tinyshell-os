@@ -6,8 +6,8 @@
 /*
  * Shared early-boot console: VGA text at 0xB8000 and COM1 serial.
  *
- * Day-2 integration (member A): call console_init() first, then print
- * CONSOLE_OK with console_write(). Do not replace kernel.c VGA on day 1.
+ * Initialize this subsystem before other modules emit startup markers.
+ * All early diagnostics use the shared console_write() path.
  */
 void console_init(void);
 void console_clear(void);

@@ -11,6 +11,10 @@ build/
 *.core
 .gdb_history
 
+# Python caches
+__pycache__/
+*.py[cod]
+
 # Editor and OS metadata
 .vscode/
 .idea/
@@ -21,4 +25,3 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-

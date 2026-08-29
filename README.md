@@ -1,16 +1,41 @@
 # TinyShell OS
 
-基于 x86（i386）的教学型微内核操作系统课程设计。
+TinyShell OS 是一个基于 x86（i386）的教学型微内核原型。系统由 GRUB Multiboot v1 加载，使用 freestanding C11 和少量汇编实现启动、中断、内存、任务、IPC，以及可交互的 Ring 0 Shell。
 
-当前基线已完成四轮。内核仍由 GRUB Multiboot 加载 32 位镜像，并初始化 Console、GDT、IDT、BIOS memory map、PMM、PIC、PIT、PS/2 键盘、分页、启动堆、协作任务和拷贝式 IPC。第四轮在 Ring 0 接入可交互 TinyShell：真实 IRQ1 字符进入有界队列，前台主循环做行编辑、命令解析，并操作静态 RAMFS。这是教学型微内核原型，Shell 与 RAMFS 尚未放到用户态。
+> 当前 Shell 与 RAMFS 仍运行在 Ring 0。项目尚未实现 TSS、Ring 3、系统调用和用户态隔离，因此不宣称是完整微内核。
 
-## 统一开发环境
+## 功能概览
 
-Docker 是本项目的标准构建和验收环境。仓库中的 `Dockerfile` 固定 Ubuntu 24.04 基础镜像，并安装 GCC 13、32 位编译支持、GRUB 2、QEMU 8、binutils、GDB、NASM 和 xorriso。
+- **启动与 CPU 基础：** VGA/COM1 Console、平坦 GDT、256 项 IDT、32 个 CPU 异常入口和真实 `int3` 返回测试。
+- **内存管理：** Multiboot memory map、4 KiB 物理页分配器、非 PAE 分页、前 128 MiB identity map、动态页映射和 256 KiB 启动堆。
+- **中断与设备：** 8259 PIC、IRQ dispatcher、100 Hz PIT、PS/2 Set 1 键盘解码和 64 字节输入队列。
+- **任务与 IPC：** 最多 8 个协作式内核任务、round-robin 调度、静态 endpoint 和非阻塞深拷贝 FIFO。
+- **Shell 与 RAMFS：** 行编辑、固定命令解析、系统状态查询，以及 16 个文件、每个 512 字节的静态内存文件系统。
+- **自动验收：** Docker 内完成构建，QEMU 以 16/64/128 MiB 启动，并通过真实 monitor `sendkey` 验证 IRQ1 到 Shell 的完整路径。
 
-组员的宿主机可以是 Windows、macOS 或 Linux，但提交前必须通过 Docker 测试。宿主机直接执行 `make test` 只用于快速开发，不能代替容器验收。
+## 运行链路
 
-## 快速开始
+```text
+GRUB Multiboot
+  → Console / GDT / IDT / CPU exception
+  → memory map / PMM
+  → PIC / PIT / keyboard
+  → paging / heap
+  → tasks / IPC
+  → SHELL_READY / BOOT_OK
+  → 进入 TinyShell 提示符 tiny>
+```
+
+键盘输入不会在 IRQ1 中直接执行命令：
+
+```text
+PS/2 IRQ1 → keyboard queue → foreground loop
+          → line editor → parser → RAMFS / status
+```
+
+## 快速验收
+
+Docker 是标准构建和测试环境。Dockerfile 使用固定摘要的 Ubuntu 24.04 基础镜像；环境检查要求 GCC 13.x、QEMU 8.x 和 GRUB 2.12，并安装 32 位编译支持、binutils、GDB、NASM 和 xorriso。
 
 Windows PowerShell：
 
@@ -24,11 +49,20 @@ Linux、macOS 或 WSL：
 bash tools/docker-test.sh
 ```
 
-脚本会构建 `tinyshell-os-dev:toolchain-v1` 镜像，在容器内编译内核、生成 ISO，先跑 16/64/128 MiB 启动矩阵，再跑 64 MiB 真实 QEMU `sendkey` 交互测试。
+完整测试会生成 Multiboot ISO，运行三档 QEMU 启动测试，再执行 64 MiB 真实键盘交互测试。当前基线结果为：
 
-VS Code 用户可以安装 Dev Containers 扩展，然后选择 **Dev Containers: Reopen in Container**。容器创建后会自动检查工具链并运行测试。
+```text
+QEMU 16M boot test: PASS
+QEMU 64M boot test: PASS
+QEMU 128M boot test: PASS
+PMM memory scaling: 3565 < 15853 < 32237
+QEMU boot matrix: PASS
+QEMU shell interaction: PASS
+```
 
-启动交互式 QEMU：
+测试方法和判定条件见 [`docs/testing.md`](docs/testing.md)。
+
+## 交互运行
 
 ```bash
 docker build --tag tinyshell-os-dev:toolchain-v1 .
@@ -38,41 +72,45 @@ docker run --rm -it \
   tinyshell-os-dev:toolchain-v1 make run
 ```
 
-在 `-nographic` 模式下，按 `Ctrl+A`，再按 `X` 退出 QEMU。
+在当前串口与 monitor 共用标准输入输出的模式下，按 `Ctrl+A`，再按 `X` 退出 QEMU。
 
-## 当前验收标准
+TinyShell 提供以下命令：
 
-Docker 测试应检查：
+| 命令 | 作用 |
+|---|---|
+| `help`、`about` | 查看命令和系统边界 |
+| `clear`、`echo` | 清屏和输出文本 |
+| `ls`、`touch`、`cat` | 查看、创建和读取 RAMFS 文件 |
+| `write`、`append`、`rm` | 覆盖、追加和删除文件 |
+| `status` | 查看 PMM、Heap、PIT、键盘和任务状态 |
 
-1. 内核是有效的 x86 Multiboot 镜像。
-2. 能生成 `build/tinyshell.iso`。
-3. QEMU 分别以 16、64、128 MiB 启动，串口日志包含原有启动标记以及 `RAMFS_OK`、`SHELL_INPUT_OK`、`SHELL_PARSE_OK`、`SYSTEM_STATUS_OK`、`SHELL_READY`，并且 `BOOT_OK` 只出现一次。
-4. 三档 `PMM_FREE_PAGES` 严格递增，证明 PMM 使用了 GRUB 提供的真实内存图。
-5. 日志不含 `BOOT_FAIL:` 或 `PAGE_FAULT`。
-6. 64 MiB 下 `tools/qemu-shell-test.py` 通过 QEMU monitor `sendkey` 走真实 IRQ1，完成 help、Backspace、touch/write/cat/append/ls/rm、两次 `status` 和 `about`，并输出 `QEMU shell interaction: PASS`。不得用直接调用 parser 或 keyboard handler 代替该测试。
-
-## 目录结构
+## 项目结构
 
 ```text
-boot/       x86 启动入口与 Multiboot 头
-config/     GRUB 配置
-docs/       架构与开发约定
-include/    内核公共头文件
-kernel/     内核 C 代码
-tools/      环境检查和辅助脚本
-.devcontainer/  VS Code 容器配置
-.github/    云端 Docker 构建与测试
-build/      生成物，不提交 Git
+boot/           x86 启动入口、中断桩和上下文切换
+config/         GRUB 配置
+include/        公共接口
+kernel/arch/x86/ x86 架构与设备代码
+kernel/mm/      PMM、VMM 与 Heap
+kernel/task/    协作式任务调度
+kernel/ipc/     固定消息 IPC
+kernel/shell/   行编辑、命令解析与 Runtime
+kernel/fs/      静态 RAMFS
+kernel/diag/    系统状态快照
+tools/          Docker 和 QEMU 验收脚本
+docs/           架构与测试说明
 ```
 
-后续模块按 `docs/architecture.md` 中的边界逐步加入。
+## 文档
 
-## 小组并行开发
+- [`docs/architecture.md`](docs/architecture.md)：启动流程、模块职责和设计约束。
+- [`docs/testing.md`](docs/testing.md)：Docker/QEMU 测试流程、结果和失败条件。
 
-给 A、B、C、D 四名成员及其 AI Agent 的完整任务书见：
+## 已知限制
 
-- [`docs/agent-brief-cycle-01.md`](docs/agent-brief-cycle-01.md)
-- [`docs/agent-brief-cycle-02.md`](docs/agent-brief-cycle-02.md)：2026-08-21 至 2026-08-22 加速轮次
-- [`docs/agent-brief-cycle-03.md`](docs/agent-brief-cycle-03.md)：2026-08-25 至 2026-08-26 分页、启动堆、协作任务与 IPC
-- [`docs/cycle-03-integration.md`](docs/cycle-03-integration.md)：第三轮实际合并、启动路径与测试证据
-- [`docs/cycle-04-integration.md`](docs/cycle-04-integration.md)：第四轮 Ring 0 Shell / RAMFS 集成记录
+- Shell 和 RAMFS 运行在 Ring 0，没有用户态隔离。
+- 调度器是协作式的，没有抢占、优先级或睡眠。
+- IPC 非阻塞，endpoint 不销毁；当前实现面向单核协作模型。
+- Heap、页表、任务栈和 IPC 队列使用固定容量静态存储。
+- RAMFS 不持久化，不支持目录；Shell 不支持管道、重定向、引号、历史或外部程序。
+- Page fault 会输出诊断并停机，不执行恢复。

@@ -7,10 +7,10 @@
 /*
  * Physical page allocator for the 32-bit identity-mapped boot stage.
  *
- * This module does not parse Multiboot structures. Member A walks the
- * memory map and feeds clipped regions through the functions below.
+ * This module does not parse Multiboot structures. The boot layer walks
+ * the memory map and feeds clipped regions through the functions below.
  *
- * Ownership protocol (day 2, member A):
+ * Initialization protocol:
  *   pmm_reset
  *   pmm_add_usable_region for every type == 1 range
  *   pmm_reserve_region for 0-1 MiB, the kernel image, and Multiboot buffers
